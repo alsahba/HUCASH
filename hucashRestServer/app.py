@@ -35,8 +35,7 @@ def createCustomer():
     lastName = request.args['lastName'] 
     walletId = request.args['walletId']
 
-
-    json_value = {
+    jsonCustomer = {
         "$class": "org.example.basic.Customer",
         "customerId": customerId,
         "firstName": firstName,
@@ -44,7 +43,14 @@ def createCustomer():
         "wallet": "org.example.basic.CustomerWallet"+walletId
     }
 
-    r = requests.post('http://localhost:3000/api/Customer', data = json_value)
+    jsonWallet = {
+        "$class": "org.example.basic.CustomerWallet",
+        "walletId": walletId,
+        "balance": "0"
+    }
+
+    r = requests.post('http://localhost:3000/api/Customer', data = jsonCustomer)
+    r = requests.post('http://localhost:3000/api/CustomerWallet', data = jsonWallet)
     return redirect ("/wallet")
 
 
