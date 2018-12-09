@@ -6,8 +6,8 @@ import os
 
 app = Flask(__name__)
 
- 
-#random donus ekranifg
+
+#random donus ekrani
 @app.route("/wallet")
 def returnScreen():
     return "Islemin basarili gecti sahip"
@@ -46,13 +46,14 @@ def createCustomer():
     requestForDefiningId = requests.get("http://localhost:3000/api/Customer")
     content = requestForDefiningId.json()
 
-    if content != None or content != {}:
+
+    try: 
         oldId = content[-1]['customerId']
         oldIdParse = oldId.split("-")
         newIdNumber = int(oldIdParse[1]) + 1
         newId = "customer-" + str(newIdNumber) 
 
-    else:
+    except:
         newId = "customer-1"
 
     jsonCustomer = {
