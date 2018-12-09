@@ -6,8 +6,8 @@ import os
 
 app = Flask(__name__)
 
-
-#random donus ekrani
+ 
+#random donus ekranifg
 @app.route("/wallet")
 def returnScreen():
     return "Islemin basarili gecti sahip"
