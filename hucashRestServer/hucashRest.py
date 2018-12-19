@@ -5,11 +5,21 @@ from bson.json_util import dumps
 from flask_mail import Mail, Message
 import random
 import os
+import re
 
 app = Flask(__name__)
 
-errorJson={'error':'login'}
-noPendingJson={'error':'no pending transaction'}
+errorJson = {'error': 'login'}
+generalErrorJson = {'error': 'general'}
+txHistoryRecordNotFoundErrorJson = {'error': 'no transaction record found'}
+unsuccesfullLoginErrorJson = {'error': 'login process is unsuccessful'}
+usernameAlreadyTakenErrorJson = {'error': 'username already taken'}
+unregisteredCustomerErrorJson = {'error': 'there is no registered customer found'}
+noPendingErrorJson = {'error':'no pending transaction'}
+usernamePasswordErrorJson = {'error': 'username or password is in invalid form'}
+insufficientBalanceErrorJson = {'error': 'customer has not sufficient balance'}
+txSuccessfulJson = {'tx': 'successfull'}
+
 
 #######################################    SORUNLAR  ###############################################
 ####################################################################################################
@@ -17,15 +27,13 @@ noPendingJson={'error':'no pending transaction'}
 # SIFRESINI UNUTAN KULLANICI NOLACAK
 # E MAILI EKLEMEMIZ LAZIMMI CUSTOMER BILGILERINE
 # KREDI KARTI EKRANININ TAMAMEN FRONTENNDE HANDLED KABUL EDIYORUM SADECE BUY HUCASH URLSI VAR
-# SIFRE REGEXINI UNUTMA
-# KULLANICI ADI REGEXI
-# PENDINGDE BAKIYE YETERSIZ ERRORU KONTROLU (USER VARMI YOKMU )
-#####################################################################################################
+#
+####################################################################################################
 
 #random donus ekrani
 @app.route("/wallet")
 def returnScreen():
-    return "Islemin basarili gecti sahip"
+    return "Isleminiz basarili gecti"
 
 # Ornek url http://localhost:5000/login?username=nuribilge&password=cannes
 # username password alip giris yapan kullaniciyi donderiyorjson seklinde
@@ -41,9 +49,9 @@ def login():
         if password == customerJson['password']:
             return dumps(customerJson)
         else:
-            return dumps(errorJson)
+            return dumps(unsuccesfullLoginErrorJson)
     except:
-        return dumps(errorJson)
+        return dumps(unregisteredCustomerErrorJson)
 
 
 # Ornek url http://localhost:5000/wallet/show?username=nuribilge
@@ -57,7 +65,7 @@ def showWallet():
 
     try:
         walletJson['error']
-        return dumps(errorJson)
+        return dumps(unregisteredCustomerErrorJson)
         
     except:
         return dumps(walletJson)
@@ -81,7 +89,8 @@ def createEntity():
 	return redirect ("/wallet")
 
 
-#customer yaratabilecegin url http://localhost:5000/register?username=nuribilge&password=cannes&firstName=nuri&lastName=ceylan seklinde kullaniliyor.
+#customer yaratabilecegin url http://localhost:5000/register?username=nuribilge&password=Cannes12&firstName=nuri&lastName=ceylan seklinde kullaniliyor.
+#username minimum 6 karakterli olmak zorunda, password minimum 8 karakter olmali buyuk kucuk harf ve sayi icermek zorunda.
 #customer yaratirken customer walletini de otomatik yaratiyor.
 @app.route("/register")
 def createCustomer():
@@ -91,33 +100,38 @@ def createCustomer():
     firstName = request.args['firstName']
     lastName = request.args['lastName'] 
 
-    checkUserRegisteredBefore = requests.get("http://localhost:3000/api/Customer/"+customerId)
-    checkUserRegisteredBeforeJson = checkUserRegisteredBefore.json()
+    if re.match(r'[A-Za-z0-9@#$%^&+=]{8,}', password) and re.match(r'[A-Za-z0-9]{6,}', customerId):
+        checkUserRegisteredBefore = requests.get("http://localhost:3000/api/Customer/"+customerId)
+        checkUserRegisteredBeforeJson = checkUserRegisteredBefore.json()
 
-    try:
-        checkUserRegisteredBeforeJson['error']
-        jsonCustomer = {
-            "$class": "org.example.basic.Customer",
-            "customerId": customerId,
-            "password": password,
-            "firstName": firstName,
-            "lastName": lastName,
-            "tp": "[]",
-            "wallet": "org.example.basic.CustomerWallet#" + customerId + "-wallet"
-        }
+        try:
+            checkUserRegisteredBeforeJson['error']
+            jsonCustomer = {
+                "$class": "org.example.basic.Customer",
+                "customerId": customerId,
+                "password": password,
+                "firstName": firstName,
+                "lastName": lastName,
+                "tp": "[]",
+                "transactionHistory": "[]",
+                "wallet": "org.example.basic.CustomerWallet#" + customerId + "-wallet"
+            }
 
-        jsonWallet = {
-            "$class": "org.example.basic.CustomerWallet",
-            "walletId": customerId + "-wallet",
-            "balance": "0"
-        }
+            jsonWallet = {
+                "$class": "org.example.basic.CustomerWallet",
+                "walletId": customerId + "-wallet",
+                "balance": "0"
+            }
 
-        r = requests.post('http://localhost:3000/api/Customer', data = jsonCustomer)
-        r = requests.post('http://localhost:3000/api/CustomerWallet', data = jsonWallet)
-        return dumps(jsonCustomer)
+            r = requests.post('http://localhost:3000/api/Customer', data = jsonCustomer)
+            r = requests.post('http://localhost:3000/api/CustomerWallet', data = jsonWallet)
+            return dumps(jsonCustomer)
 
-    except:
-        return dumps(errorJson)
+        except:
+            return dumps(usernameAlreadyTakenErrorJson)
+
+    else:
+        return dumps(usernamePasswordErrorJson)
 
 # bu direk kullanilmiyor pending show icin cagriliyor
 # Ornek url http://localhost:5000/transaction/prototype?id=243823975fjdshf38547
@@ -130,7 +144,7 @@ def getPendingTxContent():
 
     try:
         checkTxPrototypeExistJson['error']
-        return dumps(errorJson)
+        return dumps(generalErrorJson)
     except:
         return dumps(checkTxPrototypeExistJson)
 
@@ -147,12 +161,12 @@ def showPendingTXs():
     pendingTxList = []
     try:
         checkUserRegisteredBeforeJson['error']
-        return dumps(errorJson)
+        return dumps(unregisteredCustomerErrorJson)
 
     except:
         userJson = checkUserRegisteredBeforeJson
         if len(userJson['tp']) == 0:
-            return dumps(noPendingJson)
+            return dumps(noPendingErrorJson)
         else:
             for protoTxId in userJson['tp']:
                 split = protoTxId.split('#')
@@ -165,7 +179,7 @@ def showPendingTXs():
 
 #login olmus kullaniciyi direk sender olarak almamiz gerekiyor, bir de username demistik,
 #usernameden receiver id ceken bir yapi olusturmamiz gerekir
-#Ornek url http://localhost:5000/transaction/pending?senderId=customer-5&receiverId=customer-6&amount=2000
+#Ornek url http://localhost:5000/transaction/pending/create?senderId=customer-5&receiverId=customer-6&amount=2000
 @app.route("/transaction/pending/create")
 def sendHucashTxPending():
 
@@ -173,26 +187,31 @@ def sendHucashTxPending():
     receiverId = request.args['receiverId']
     amount = request.args['amount'] 
 
-    #receiver id kontrolu 
+    checkReceiverRegisteredBefore = requests.get("http://localhost:3000/api/Customer/" + receiverId)
+    checkReceiverRegisteredBeforeJson = checkReceiverRegisteredBefore.json()
 
-    jsonPendingTx = {
-        "$class": "org.example.basic.SendHucashTransactionPending",
-        "sender": "resource:org.example.basic.Customer#" + senderId,
-        "receiver": "resource:org.example.basic.Customer#" + receiverId,
-        "amount": amount
-    }
+    try:
+        checkReceiverRegisteredBeforeJson['error']
+        return dumps(unregisteredCustomerErrorJson)
 
-    r = requests.post('http://localhost:3000/api/SendHucashTransactionPending', data = jsonPendingTx)
-    return redirect("/wallet")
+    except:
+        jsonPendingTx = {
+            "$class": "org.example.basic.SendHucashTransactionPending",
+            "sender": "resource:org.example.basic.Customer#" + senderId,
+            "receiver": "resource:org.example.basic.Customer#" + receiverId,
+            "amount": amount
+        }
+
+        r = requests.post('http://localhost:3000/api/SendHucashTransactionPending', data = jsonPendingTx)
+        return dumps(txSuccessfulJson)
 
 
-#protoId yi bi yerden pass etmek lazim yoksa kullanici nerden bilsin protosunu falan
-#Ornek Url http://localhost:5000/transaction/confirm?protoTxId=d9481e173f8f60194b23a4c9f0d39b9ef8714074 
+# Burada listeden secse ve confirm edecegi prototype transactionun idsini kullanici icindeki tp fieldidan almali.
+# Eger kullanicinin yeterli bakiyesi yoksa error donderiyor.
+# Ornek Url http://localhost:5000/transaction/confirm?protoTxId=d9481e173f8f60194b23a4c9f0d39b9ef8714074 
 @app.route("/transaction/confirm")
 def confirmPendingTx():
 
-    #balance kontrolu sonucu yapilmasi lazim 
-    #basarili icin wallet donderiyoruz
     prototypeId = request.args['protoTxId']
 
     jsonConfirmTx = {
@@ -200,18 +219,23 @@ def confirmPendingTx():
         "tp": "resource:org.example.basic.TransactionPrototype#" + prototypeId
     }
 
-    r = requests.post('http://localhost:3000/api/ConfirmTransaction', data = jsonConfirmTx)
-    return redirect("/wallet")
+    postRequest = requests.post('http://localhost:3000/api/ConfirmTransaction', data = jsonConfirmTx)
+    postRequestContent = postRequest.json()
+
+    try:
+        postRequestContent['error']
+        return dumps(insufficientBalanceErrorJson)
+
+    except:
+        return dumps(txSuccessfulJson)
 
 
-#hucash satin alma deneme url si normalde banka url sine baglanip ordan amountu ve customer cardindan id cekip islemin oyle yapilmasi gerekiyor bence
-#suanlik kullanimi http://localhost:5000/buyHucash?customerId=customer2&amount=50000 su tarzda
+# Sonuc her zaman basarili donuyor sadece user register degilse basarisiz donuyor ama zaten login olan kullanici yapabilecegi icin sikinti olmaz
+#suanlik kullanimi http://localhost:5000/buyHucash?username=bilge&amount=100000 su tarzda
 @app.route("/buyHucash")
 def buyHucash():
 
-    #wallet donder basarili olan islem icin 
-
-    customerId = request.args['customerId']
+    customerId = request.args['username']
     amount = request.args['amount']
 
     checkUserRegisteredBefore = requests.get("http://localhost:3000/api/Customer/"+customerId)
@@ -219,7 +243,7 @@ def buyHucash():
 
     try:
         checkUserRegisteredBeforeJson['error']
-        return dumps(errorJson)
+        return dumps(unregisteredCustomerErrorJson)
 
     except:
         jsonBuyHucash = { 
@@ -229,8 +253,97 @@ def buyHucash():
         }
 
         r = requests.post('http://localhost:3000/api/BuyHucash', data = jsonBuyHucash)
-        return ("/wallet")
+        walletRequest = requests.get('http://localhost:3000/api/CustomerWallet/' + customerId + '-wallet')
+        return dumps(walletRequest.json())
 
+def getUsernameFromRecord(record):
+    getWallet = record.split('#')
+    getUsername = getWallet[1].split('-')
+    return getUsername[0]
+
+
+def getHistorianById(historianId):
+
+    getRequest = requests.get('http://localhost:3000/api/system/historian/' + historianId)
+    getRequestContent = getRequest.json()
+
+    return getRequestContent['eventsEmitted']
+
+def eventParser(eventContent, senderOrReciever, customerId):
+
+    #buyHucash
+    if len(eventContent) == 1:
+
+        oldBalance = eventContent[0]['oldBalance']
+        newBalance = eventContent[0]['newBalance']
+
+        buyHucashEventJson = {
+            'event': 'buyHucash',
+            'sender': '-',
+            'receiver': customerId,
+            'oldBalance': oldBalance,
+            'newBalance': newBalance,
+        }
+        return buyHucashEventJson
+
+    #sendHucash
+    else:
+        print(senderOrReciever)
+        if senderOrReciever == '0}':
+            oldBalance = eventContent[0]['oldValue']
+            newBalance = eventContent[0]['newValue']
+            receiver = getUsernameFromRecord(eventContent[1]['wallet'])
+
+            sendHucashJson = {
+                'event': 'sendHucash',
+                'sender': '-',
+                'receiver': receiver,
+                'oldBalance': oldBalance,
+                'newBalance': newBalance,
+            }
+
+            return sendHucashJson
+        else:
+            oldBalance = eventContent[1]['oldValue']
+            newBalance = eventContent[1]['newValue']
+            sender = getUsernameFromRecord(eventContent[0]['wallet'])
+
+            sendHucashJson = {
+                'event': 'sendHucash',
+                'sender': sender,
+                'receiver': '-',
+                'oldBalance': oldBalance,
+                'newBalance': newBalance,
+            }
+
+            return sendHucashJson
+   
+
+@app.route("/transaction/history")
+def showTxHistory():
+    customerId = request.args['username']
+
+    checkUserRegisteredBefore = requests.get("http://localhost:3000/api/Customer/" + customerId)
+    checkUserRegisteredBeforeJson = checkUserRegisteredBefore.json()
+
+    txHistoryJsonList = []
+
+    try:
+        checkUserRegisteredBeforeJson['error']
+        return dumps(unregisteredCustomerErrorJson)
+
+    except:
+        userJson = checkUserRegisteredBeforeJson
+        historyRecordList = userJson['transactionHistory']
+
+        if len(historyRecordList) == 0:
+            return dumps(txHistoryRecordNotFoundErrorJson)
+        else:
+            for record in historyRecordList:
+                splittedRecord = record.split('#')
+                txHistoryEventJson = eventParser(getHistorianById(splittedRecord[1]), splittedRecord[2], customerId)
+                txHistoryJsonList.append(txHistoryEventJson)
+            return dumps(txHistoryJsonList)
 
 if __name__ == "__main__":
     app.run(debug=True)
