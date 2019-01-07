@@ -1,39 +1,36 @@
 from flask import Flask, render_template, request, redirect
+from flask_cors import CORS
 import requests
 import json
 from bson.json_util import dumps
-from flask_mail import Mail, Message
 import random
 import os
 import re
 
 app = Flask(__name__)
+cors = CORS(app)
 
 errorJson = {'error': 'login'}
 generalErrorJson = {'error': 'general'}
 txHistoryRecordNotFoundErrorJson = {'error': 'no transaction record found'}
+invalidAmountErrorJson = {'error': 'amount must be greater than zero'}
 unsuccesfullLoginErrorJson = {'error': 'login process is unsuccessful'}
 usernameAlreadyTakenErrorJson = {'error': 'username already taken'}
 unregisteredCustomerErrorJson = {'error': 'there is no registered customer found'}
 noPendingErrorJson = {'error':'no pending transaction'}
 usernamePasswordErrorJson = {'error': 'username or password is in invalid form'}
 insufficientBalanceErrorJson = {'error': 'customer has not sufficient balance'}
-txSuccessfulJson = {'tx': 'successfull'}
+txSuccessfulJson = {'tx': 'successful'}
+txCancelSuccessfulJson = {'tx': 'succesfully cancelled'}
+txPrototypeNotFoundErrorJson = {'error': 'transaction prototype does not exist'}
+qrSuccessfulJson = {'msg': 'Payment is successful!'}
+qrBalanceErrorJson = {'msg': 'Balance is insufficient! Please buy Hucash for this transaction.'}
 
-
-#######################################    SORUNLAR  ###############################################
-####################################################################################################
-#
-# SIFRESINI UNUTAN KULLANICI NOLACAK
-# E MAILI EKLEMEMIZ LAZIMMI CUSTOMER BILGILERINE
-# KREDI KARTI EKRANININ TAMAMEN FRONTENNDE HANDLED KABUL EDIYORUM SADECE BUY HUCASH URLSI VAR
-#
-####################################################################################################
 
 #random donus ekrani
 @app.route("/wallet")
 def returnScreen():
-    return "Isleminiz basarili gecti"
+    return "Rest Server is up"
 
 # Ornek url http://localhost:5000/login?username=nuribilge&password=cannes
 # username password alip giris yapan kullaniciyi donderiyorjson seklinde
@@ -80,7 +77,7 @@ def createEntity():
 	balance = request.args['balance']
 
 	json_val = {
-        "$class": "org.example.basic.CustomerWallet",
+        "$class": "org.hucash.CustomerWallet",
         "walletId": walletId,
         "balance": balance
     }
@@ -107,18 +104,18 @@ def createCustomer():
         try:
             checkUserRegisteredBeforeJson['error']
             jsonCustomer = {
-                "$class": "org.example.basic.Customer",
+                "$class": "org.hucash.Customer",
                 "customerId": customerId,
                 "password": password,
                 "firstName": firstName,
                 "lastName": lastName,
-                "tp": "[]",
+                "tp": '[]',
                 "transactionHistory": "[]",
-                "wallet": "org.example.basic.CustomerWallet#" + customerId + "-wallet"
+                "wallet": "org.hucash.CustomerWallet#" + customerId + "-wallet"
             }
 
             jsonWallet = {
-                "$class": "org.example.basic.CustomerWallet",
+                "$class": "org.hucash.CustomerWallet",
                 "walletId": customerId + "-wallet",
                 "balance": "0"
             }
@@ -134,11 +131,8 @@ def createCustomer():
         return dumps(usernamePasswordErrorJson)
 
 # bu direk kullanilmiyor pending show icin cagriliyor
-# Ornek url http://localhost:5000/transaction/prototype?id=243823975fjdshf38547
-@app.route("/transaction/prototype")
-def getPendingTxContent():
-    protoTxId = request.args['id']
-
+def getPendingTxContent(protoTxId):
+    
     checkTxPrototypeExist = requests.get('http://localhost:3000/api/TransactionPrototype/' + protoTxId)
     checkTxPrototypeExistJson = checkTxPrototypeExist.json()
 
@@ -146,8 +140,7 @@ def getPendingTxContent():
         checkTxPrototypeExistJson['error']
         return dumps(generalErrorJson)
     except:
-        return dumps(checkTxPrototypeExistJson)
-
+        return checkTxPrototypeExistJson
 
 # Ornek url http://localhost:5000/transaction/pending/show?username=hacker12
 # Kullanici icindeki tp degiskenine bagli olarak oradan idleri cekip icindeki prototype jsonlarini json list olarak donderiyor
@@ -170,9 +163,9 @@ def showPendingTXs():
         else:
             for protoTxId in userJson['tp']:
                 split = protoTxId.split('#')
-                contentRequest = requests.get('http://localhost:5000/transaction/prototype?id=' + split[1])
-                contentJson = contentRequest.json()
-                pendingTxList.append(contentJson)
+                contentRequest = getPendingTxContent(split[1])
+                #contentJson = contentRequest.json()
+                pendingTxList.append(contentRequest)
             return dumps(pendingTxList)
 
 
@@ -196,14 +189,18 @@ def sendHucashTxPending():
 
     except:
         jsonPendingTx = {
-            "$class": "org.example.basic.SendHucashTransactionPending",
-            "sender": "resource:org.example.basic.Customer#" + senderId,
-            "receiver": "resource:org.example.basic.Customer#" + receiverId,
+            "$class": "org.hucash.SendHucashTransactionPending",
+            "sender": "resource:org.hucash.Customer#" + senderId,
+            "receiver": "resource:org.hucash.Customer#" + receiverId,
             "amount": amount
         }
+        
+        if float(amount) > 0:
+            r = requests.post('http://localhost:3000/api/SendHucashTransactionPending', data = jsonPendingTx)
+            return dumps(txSuccessfulJson)
+        else:
+            return dumps(invalidAmountErrorJson)
 
-        r = requests.post('http://localhost:3000/api/SendHucashTransactionPending', data = jsonPendingTx)
-        return dumps(txSuccessfulJson)
 
 
 # Burada listeden secse ve confirm edecegi prototype transactionun idsini kullanici icindeki tp fieldidan almali.
@@ -215,8 +212,8 @@ def confirmPendingTx():
     prototypeId = request.args['protoTxId']
 
     jsonConfirmTx = {
-        "$class": "org.example.basic.ConfirmTransaction",
-        "tp": "resource:org.example.basic.TransactionPrototype#" + prototypeId
+        "$class": "org.hucash.ConfirmTransaction",
+        "tp": "resource:org.hucash.TransactionPrototype#" + prototypeId
     }
 
     postRequest = requests.post('http://localhost:3000/api/ConfirmTransaction', data = jsonConfirmTx)
@@ -230,7 +227,28 @@ def confirmPendingTx():
         return dumps(txSuccessfulJson)
 
 
-# Sonuc her zaman basarili donuyor sadece user register degilse basarisiz donuyor ama zaten login olan kullanici yapabilecegi icin sikinti olmaz
+@app.route("/transaction/cancel")
+def cancelpendingTx():
+
+    prototypeId = request.args['protoTxId']
+
+    jsonConfirmTx = {
+        "$class": "org.hucash.DeclineTransaction",
+        "tp": "resource:org.hucash.TransactionPrototype#" + prototypeId
+    }
+
+    postRequest = requests.post('http://localhost:3000/api/DeclineTransaction', data = jsonConfirmTx)
+    postRequestContent = postRequest.json()
+ 
+    try:
+        postRequestContent['error']
+        return dumps(txPrototypeNotFoundErrorJson)
+
+    except:
+        return dumps(txCancelSuccessfulJson)
+            
+
+#Sonuc her zaman basarili donuyor sadece user register degilse basarisiz donuyor ama zaten login olan kullanici yapabilecegi icin sikinti olmaz
 #suanlik kullanimi http://localhost:5000/buyHucash?username=bilge&amount=100000 su tarzda
 @app.route("/buyHucash")
 def buyHucash():
@@ -238,23 +256,26 @@ def buyHucash():
     customerId = request.args['username']
     amount = request.args['amount']
 
-    checkUserRegisteredBefore = requests.get("http://localhost:3000/api/Customer/"+customerId)
-    checkUserRegisteredBeforeJson = checkUserRegisteredBefore.json()
+    if int(amount) > 0:
+        checkUserRegisteredBefore = requests.get("http://localhost:3000/api/Customer/"+customerId)
+        checkUserRegisteredBeforeJson = checkUserRegisteredBefore.json()
 
-    try:
-        checkUserRegisteredBeforeJson['error']
-        return dumps(unregisteredCustomerErrorJson)
+        try:
+            checkUserRegisteredBeforeJson['error']
+            return dumps(unregisteredCustomerErrorJson)
 
-    except:
-        jsonBuyHucash = { 
-            "$class": "org.example.basic.BuyHucash",
-            "buyer": "org.example.basic.Customer#"+customerId,
-            "amount": amount
-        }
+        except:
+            jsonBuyHucash = { 
+                "$class": "org.hucash.BuyHucash",
+                "buyer": "org.hucash.Customer#"+customerId,
+                "amount": amount
+            }
 
-        r = requests.post('http://localhost:3000/api/BuyHucash', data = jsonBuyHucash)
-        walletRequest = requests.get('http://localhost:3000/api/CustomerWallet/' + customerId + '-wallet')
-        return dumps(walletRequest.json())
+            r = requests.post('http://localhost:3000/api/BuyHucash', data = jsonBuyHucash)
+            walletRequest = requests.get('http://localhost:3000/api/CustomerWallet/' + customerId + '-wallet')
+            return dumps(walletRequest.json())
+    else:
+        return dumps(invalidAmountErrorJson)
 
 def getUsernameFromRecord(record):
     getWallet = record.split('#')
@@ -340,10 +361,64 @@ def showTxHistory():
             return dumps(txHistoryRecordNotFoundErrorJson)
         else:
             for record in historyRecordList:
-                splittedRecord = record.split('#')
-                txHistoryEventJson = eventParser(getHistorianById(splittedRecord[1]), splittedRecord[2], customerId)
-                txHistoryJsonList.append(txHistoryEventJson)
+                if record != "":
+                    splittedRecord = record.split('#')
+                    txHistoryEventJson = eventParser(getHistorianById(splittedRecord[1]), splittedRecord[2], customerId)
+                    txHistoryJsonList.append(txHistoryEventJson)
             return dumps(txHistoryJsonList)
 
+
+@app.route("/paymentWithQR")
+def paymentWithQRCode():
+    senderId = request.args['senderId']
+    receiverId = request.args['receiverId']
+    amount = request.args['amount'] 
+
+    checkReceiverRegisteredBefore = requests.get("http://localhost:3000/api/Customer/" + senderId)
+    checkReceiverRegisteredBeforeJson = checkReceiverRegisteredBefore.json()
+
+    try:
+        checkReceiverRegisteredBeforeJson['error']
+        return dumps(unregisteredCustomerErrorJson)
+
+    except:
+	getWalletRequest = requests.get("http://localhost:3000/api/CustomerWallet/" + senderId + '-wallet')
+        getWalletRequestJson = getWalletRequest.json()
+        
+        if float(getWalletRequestJson['balance']) < float(amount):
+            return dumps(qrBalanceErrorJson)
+
+        jsonPendingTx = {
+            "$class": "org.hucash.SendHucashTransactionPending",
+            "sender": "resource:org.hucash.Customer#" + senderId,
+            "receiver": "resource:org.hucash.Customer#" + receiverId,
+            "amount": amount
+        }
+
+        r = requests.post('http://localhost:3000/api/SendHucashTransactionPending', data = jsonPendingTx)
+        
+        getPrototypeIdRequestFromSender = requests.get("http://localhost:3000/api/Customer/" + senderId)
+        getPrototypeIdRequestFromSenderJson = getPrototypeIdRequestFromSender.json()
+
+        tpList = getPrototypeIdRequestFromSenderJson['tp']
+        lastPrototypeIdList = tpList[-1].split('#')
+        lastPrototypeId = lastPrototypeIdList[1]
+        
+        jsonConfirmTx = {
+        "$class": "org.hucash.ConfirmTransaction",
+        "tp": "resource:org.hucash.TransactionPrototype#" + lastPrototypeId
+        }
+
+        postRequest = requests.post('http://localhost:3000/api/ConfirmTransaction', data = jsonConfirmTx)
+        postRequestContent = postRequest.json()
+
+        try:
+            postRequestContent['error']
+            return dumps(postRequestContent)
+
+        except:
+            return dumps(qrSuccessfulJson)
+        
+# host="0.0.0.0", port=8000,
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
