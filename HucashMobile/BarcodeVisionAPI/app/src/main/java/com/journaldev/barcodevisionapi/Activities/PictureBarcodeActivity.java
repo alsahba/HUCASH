@@ -158,7 +158,7 @@ public class PictureBarcodeActivity extends AppCompatActivity implements View.On
                         }
                     }
                     if (barcodes.size() == 0) {
-                        txtResultBody.setText("No barcode could be detected. Please try again.");
+                        txtResultBody.setText("No QR Code could be detected. Please try again.");
                     }
                 } else {
                     txtResultBody.setText("Detector initialisation failed");

@@ -64,7 +64,7 @@ public class ScannedBarcodeActivity extends AppCompatActivity {
         barcodeDetector.setProcessor(new Detector.Processor<Barcode>() {
             @Override
             public void release() {
-                Toast.makeText(getApplicationContext(), "To prevent memory leaks barcode scanner has been stopped", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "To prevent memory leaks QR Code scanner has been stopped", Toast.LENGTH_SHORT).show();
             }
 
             @Override
@@ -102,7 +102,7 @@ public class ScannedBarcodeActivity extends AppCompatActivity {
             public void surfaceCreated(SurfaceHolder holder) {
                 try {
                     if (ActivityCompat.checkSelfPermission(ScannedBarcodeActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                        Toast.makeText(getApplicationContext(), "Barcode scanner started", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getApplicationContext(), "QR Code scanner started", Toast.LENGTH_SHORT).show();
                         cameraSource.start(surfaceView.getHolder());
                     } else {
                         isPauseForPerms = true;
