@@ -45,19 +45,19 @@ There are a few useful CLI tools for Composer developers. The most important one
 
 Note that you should not use su or sudo for the following npm commands.
 
-    1.	Essential CLI tools:
+   1.	Essential CLI tools:
 
-    	npm install -g composer-cli@0.19
+	npm install -g composer-cli@0.19
 
-    2.	Utility for running a REST Server on your machine to expose your business networks as RESTful APIs:
+   2.	Utility for running a REST Server on your machine to expose your business networks as RESTful APIs:
 
 	npm install -g composer-rest-server@0.19
 
-    3.	Useful utility for generating application assets:
+   3.	Useful utility for generating application assets:
 	
 	npm install -g generator-hyperledger-composer@0.19
 
-    4.	Yeoman is a tool for generating applications, which utilises generator-hyperledger-composer:
+   4.	Yeoman is a tool for generating applications, which utilises generator-hyperledger-composer:
 
 	npm install -g yo
 
@@ -66,7 +66,7 @@ Note that you should not use su or sudo for the following npm commands.
 
 If you've already tried Composer online, you'll have seen the browser app "Playground". You can run this locally on your development machine too, giving you a UI for viewing and demonstrating your business networks.
 
-    1.	Browser app for simple editing and testing Business Networks:
+   1.	Browser app for simple editing and testing Business Networks:
 	
 	npm install -g composer-playground@0.19
 
@@ -76,7 +76,7 @@ If you've already tried Composer online, you'll have seen the browser app "Playg
 This step gives you a local Hyperledger Fabric runtime to deploy your business networks to.
 
   
-  1.	In a directory of your choice (we will assume ~/fabric-dev-servers), get the .tar.gz file that contains the tools to install Hyperledger 		Fabric:
+  1.	In a directory of your choice (we will assume `~/fabric-dev-servers`), get the .tar.gz file that contains the tools to install Hyperledger 		Fabric:
   
 	
 	mkdir ~/fabric-dev-servers && cd ~/fabric-dev-servers
@@ -87,9 +87,9 @@ A zip is also available if you prefer: just replace the .tar.gz file with fabric
 
  2.	Use the scripts you just downloaded and extracted to download a local Hyperledger Fabric v1.2 runtime:
 
-	cd ~/fabric-dev-servers
-	export FABRIC_VERSION=hlfv12
-	./downloadFabric.sh
+		 cd ~/fabric-dev-servers
+		 export FABRIC_VERSION=hlfv12
+		 ./downloadFabric.sh
 
 
 
@@ -97,7 +97,7 @@ A zip is also available if you prefer: just replace the .tar.gz file with fabric
 
 
 
-You control your runtime using a set of scripts which you'll find in ~/fabric-dev-servers if you followed the suggested defaults.
+You control your runtime using a set of scripts which you'll find in `~/fabric-dev-servers` if you followed the suggested defaults.
 	
 The first time you start up a new runtime, you'll need to run the start script, then generate a PeerAdmin card:
 
